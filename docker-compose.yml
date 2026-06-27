@@ -1,0 +1,91 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  music-autodl + Tidarr — docker-compose.yml
+#
+#  Copy the music-autodl service block into your existing stack if you already
+#  have Tidarr running, or use this file as-is to start both together.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── music-autodl ────────────────────────────────────────────────────────
+  music-autodl:
+    build: .
+    container_name: music-autodl
+    restart: unless-stopped
+    command: ["--daemon"]          # remove for a one-shot run
+    volumes:
+      - autodl-data:/data          # seen DB, Tidal session, Spotify cache
+    environment:
+
+      # ── Tidarr ────────────────────────────────────────────────────────
+      TIDARR_URL: "http://tidarr:8484"
+      TIDARR_KEY: ""               # paste from: docker exec tidarr cat /shared/.tidarr-api-key
+
+      # ── Plex ──────────────────────────────────────────────────────────
+      PLEX_URL:           "http://plex:32400"
+      PLEX_TOKEN:         ""       # your Plex token — leave blank to disable
+      PLEX_MUSIC_LIBRARY: "Music"  # exact name of your music library in Plex
+
+      # ── Last.fm ───────────────────────────────────────────────────────
+      LASTFM_API_KEY:  ""          # from https://www.last.fm/api/account/create
+      LASTFM_USERNAME: ""          # your Last.fm username
+      LASTFM_PERIOD:   "1month"    # overall | 7day | 1month | 3month | 6month | 12month
+      LASTFM_TOP_LIMIT: "50"
+
+      # ── Spotify ───────────────────────────────────────────────────────
+      # Create an app at https://developer.spotify.com/dashboard
+      # Add http://localhost:9090 as a Redirect URI in your app settings
+      SPOTIFY_CLIENT_ID:     ""
+      SPOTIFY_CLIENT_SECRET: ""
+      SPOTIFY_REDIRECT_URI:  "http://localhost:9090"
+      # On first run, copy the printed URL into a browser, log in, then paste
+      # the redirected URL back into the terminal prompt.
+
+      # ── TIDAL ─────────────────────────────────────────────────────────
+      TIDAL_ENABLED:      "true"
+      TIDAL_SESSION_FILE: "/data/tidal_session.json"
+      # On first run, open the printed URL in a browser to authorise.
+
+      # ── Recommendation tuning ─────────────────────────────────────────
+      SIMILAR_PER_ARTIST: "10"     # how many similar artists to fetch per seed
+      MIN_SIMILARITY:     "0.3"    # Last.fm similarity threshold (0–1)
+      SKIP_EXISTING:      "true"   # skip artists already in Plex
+      MAX_NEW_PER_RUN:    "0"      # 0 = unlimited; set e.g. 20 to pace downloads
+      SCHEDULE:           "0 3 * * *"  # cron: default = 3am UTC daily
+      SEEN_DB:            "/data/seen_artists.json"
+
+      # ── Misc ──────────────────────────────────────────────────────────
+      LOG_LEVEL: "INFO"            # DEBUG for verbose output
+
+    networks:
+      - media
+    depends_on:
+      - tidarr
+
+
+  # ── Tidarr ──────────────────────────────────────────────────────────────
+  tidarr:
+    image: cstaelen/tidarr:latest
+    container_name: tidarr
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    volumes:
+      - /path/to/tidarr/config:/shared   # ← change
+      - /path/to/your/music:/music       # ← change
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+    networks:
+      - media
+
+
+volumes:
+  autodl-data:
+
+networks:
+  media:
+    name: media
+    driver: bridge
